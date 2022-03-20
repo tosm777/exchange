@@ -1,0 +1,8 @@
+go 1.18
+
+use (
+	./blockchain
+	./library
+	./node
+	./wallet_server
+)

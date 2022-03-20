@@ -1,0 +1,70 @@
+version: '3.7'
+services:
+    exchange:
+        container_name: exchange
+        build:
+            context: ./docker/go
+        ports:
+            - 8080:8080
+        volumes:
+            - ./:/go/src/exchange/
+        working_dir: /go/src/exchange/
+        tty: true
+
+    net:
+        container_name: net
+        build:
+            context: ./docker/nginx
+        depends_on:
+            - wallet
+            - node
+        ports:
+            - 443:443
+        volumes:
+            - ./net/var/www:/var/www:cached
+        environment:
+            - TZ=Asia/Tokyo
+        tty: true
+
+    wallet:
+        container_name: wallet
+        image: node:latest
+        depends_on:
+            - wallet_server
+        tty: true
+        volumes:
+            - ./wallet:/var/www:cached
+        working_dir: /var/www/app
+
+    wallet_server:
+        build:
+            context: ./docker/go
+        container_name: wallet_server
+        volumes:
+            - ./:/go/src/exchange/
+        working_dir: /go/src/exchange/wallet_server/
+        tty: true
+
+    node:
+        build:
+            context: ./docker/go
+        container_name: node
+        ports:
+            - 7000:7000
+            - 7001:7001
+            - 7002:7002
+        volumes:
+            - ./:/go/src/exchange/
+        working_dir: /go/src/exchange/node/
+        tty: true
+
+    chain:
+        build:
+            context: ./docker/go
+        container_name: chain
+        ports:
+            - 6999:6999
+        volumes:
+            - ./:/go/src/exchange/
+        working_dir: /go/src/exchange/chain/
+        tty: true
