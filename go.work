@@ -4,5 +4,5 @@ use (
 	./blockchain
 	./library
 	./node
-	./wallet_server
+	./wallet
 )

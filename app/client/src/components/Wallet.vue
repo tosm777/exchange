@@ -17,7 +17,6 @@
                     <q-input :disabled="true" v-model="userAddress" />
                 </q-form-item>
 
-                <!-- <q-form-item label="User Amount"style="width: 50%;" > -->
                 <q-form-item label="User Amount" >
                     <div style="display: inline-block; width: 50%; margin-right: 5%;" >
                         <q-input :disabled="true" v-model="userAmount" />
@@ -125,8 +124,6 @@ function Send() {
     axios.defaults.headers.get['Access-Control-Allow-Origin'] = '*'
 
     axios.post('http://net.develop:443/transaction', params)
-    // axios.post('http://localhost:7000/transacitons', params)
-    // axios.post('http://172.24.0.3:7000/transactions', params)
         .then(function (response) {
             // handle success(axiosの処理が成功した場合に処理させたいことを記述)
             console.log(response)

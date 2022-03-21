@@ -52,17 +52,12 @@ func main() {
 	config := Config{}
 
 	flag.StringVar(&config.Rendezvous, "rendezvous", "default", "")
-	// flag.Int64Var(&config.Seed, "seed", 0, "Seed value for generating a PeerID, 0 is random")
 	flag.Var(&config.DiscoveryPeers, "peer", "Peer multiaddress for peer discovery")
 	flag.StringVar(&config.ProtocolID, "protocolid", "/p2p/rpc/default", "")
 	flag.IntVar(&config.Port, "port", 0, "")
 	flag.Parse()
 
 	ctx, cancel := context.WithCancel(context.Background())
-
-	// hostname, _ := os.Hostname()
-	// addressss, _ := net.LookupHost(hostname)
-	// log.Println(addressss)
 
 	h, err := NewHost(ctx, config.Port)
 	if err != nil {

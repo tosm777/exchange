@@ -1,4 +1,4 @@
-module wallet_server
+module server
 
 go 1.18
 

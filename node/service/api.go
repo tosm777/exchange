@@ -1,115 +1,173 @@
 package service
 
 import (
-	"context"
+	"crypto/ecdsa"
 	"encoding/json"
-	"errors"
+	"fmt"
+	"io"
 	"log"
+	"net/http"
+	"time"
 
 	"blockchain"
+	"library/response"
 	"library/sign"
+
+	"github.com/rs/cors"
 )
 
-type BlockchainRPCAPI struct {
-	service *Service
+const (
+	MINING_TIMER_SEC = 10
+)
+
+func (s *Service) Run(port int) {
+	port = port + 10
+
+	s.StartMining()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/transactions", s.Transaction)
+	mux.HandleFunc("/chain", s.GetChains)
+	mux.HandleFunc("/amount", s.Amount)
+
+	handler := cors.Default().Handler(mux)
+
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), handler))
 }
 
-type TransactionRequest struct {
-	SenderAddress    *string  `json:"sender_address"`
-	RecipientAddress *string  `json:"recipient_address"`
-	SenderPublicKey  *string  `json:"sender_public_key"`
-	Value            *float32 `json:"value"`
-	Signature        *string  `json:"signature"`
+func (s *Service) CreateTransaction(sender, recipient string, value float32, senderPublicKey *ecdsa.PublicKey, sig *sign.Signature) bool {
+	isTransacted := s.blockchain.AddTransaction(sender, recipient, value, senderPublicKey, sig)
+	return isTransacted
 }
 
-func (tr *TransactionRequest) Validate() bool {
-	if tr.SenderAddress == nil ||
-		tr.RecipientAddress == nil ||
-		tr.SenderPublicKey == nil ||
-		tr.Value == nil ||
-		tr.Signature == nil {
+func (s *Service) GetChains(w http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case http.MethodGet:
+
+		m, _ := s.blockchain.MarshalJSON()
+		w.Header().Add("Content-Type", "application/json")
+		io.WriteString(w, string(m[:]))
+	default:
+		log.Printf("ERROR: Invalid HTTP Method")
+	}
+}
+
+func (s *Service) ValidChain(chain []*blockchain.Block) bool {
+	if len(chain) == 0 {
 		return false
 	}
-	return true
+	return s.blockchain.ValidChain(chain)
 }
 
-func (bcs *BlockchainRPCAPI) CreateTransaction(ctx context.Context, t TransactionRequest, out *TransactionRequest) error {
-	publicKey := sign.String2PublicKey(*t.SenderPublicKey)
-	signature := sign.String2Signature(*t.Signature)
-
-	isCreated := bcs.service.CreateTransaction(
-		*t.SenderAddress,
-		*t.RecipientAddress,
-		*t.Value,
-		publicKey,
-		signature,
-	)
-
-	if !isCreated {
-		return errors.New("Failed to create Transaction")
+func (s *Service) GetBlockchain() *blockchain.Blockchain {
+	if s.blockchain == nil {
+		s.SetBlockchain()
 	}
-
-	return nil
+	return s.blockchain
 }
 
-func (bcs *BlockchainRPCAPI) Mine(ctx context.Context, t TransactionRequest, out *TransactionRequest) error {
+func (s *Service) Transaction(w http.ResponseWriter, req *http.Request) {
 
-	bcs.service.Mining()
+	switch req.Method {
+	case http.MethodGet:
+		log.Println("Transactions Get now")
 
-	return nil
-}
+		w.Header().Add("Content-Type", "application/json")
+		tr := s.blockchain.TransactionPool()
 
-func (bcs *BlockchainRPCAPI) Consensus(ctx context.Context, t BlockResponse, out *TransactionRequest) error {
+		m, _ := json.Marshal(struct {
+			Transactions []*blockchain.Transaction `json:"transactions"`
+			Length       int                       `json:"length"`
+		}{
+			Transactions: tr,
+			Length:       len(tr),
+		})
 
-	var resp ResponseData
-	_ = json.Unmarshal(t.Data, &resp)
+		io.WriteString(w, string(m[:]))
 
-	maxLength := len(bcs.service.blockchain.Chain())
-	if len(resp.Block) < maxLength {
-		return errors.New("Less Than This Node")
+	case http.MethodPost:
+		log.Println("Transactions Post now")
+
+		decoder := json.NewDecoder(req.Body)
+		var t TransactionRequest
+		err := decoder.Decode(&t)
+		if err != nil {
+			log.Printf("ERROR: %v", err)
+			io.WriteString(w, string(response.JsonMessage("fail")))
+		}
+		if !t.Validate() {
+			log.Println("ERROR: Missing field(s)")
+			io.WriteString(w, string(response.JsonMessage("fail")))
+			return
+		}
+		w.Header().Add("Content-Type", "application/json")
+
+		var m []byte
+		if err := s.CallCreateTransaction(&t); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			m = response.JsonMessage("fail")
+		} else {
+			w.WriteHeader(http.StatusCreated)
+			m = response.JsonMessage("success")
+		}
+		io.WriteString(w, string(m))
+
+	default:
+		w.WriteHeader(http.StatusBadRequest)
+		log.Println("ERROR: Invalid HTTP Method")
 	}
+}
 
-	if !bcs.service.ValidChain(resp.Block) {
-		return errors.New("No Valid Block")
+func (s *Service) Mine(w http.ResponseWriter, req *http.Request) {
+	log.Println("mining now")
+
+	switch req.Method {
+	case http.MethodGet:
+		isMinded := s.Mining()
+
+		w.Header().Add("Content-Type", "application/json")
+		var m []byte
+		if !isMinded {
+			w.WriteHeader(http.StatusBadRequest)
+			m = response.JsonMessage("fail")
+		} else {
+			w.WriteHeader(http.StatusCreated)
+			m = response.JsonMessage("success")
+		}
+		io.WriteString(w, string(m))
+
+	default:
+		w.WriteHeader(http.StatusBadRequest)
+		log.Println("ERROR: Invalid HTTP Method")
 	}
-
-	return nil
 }
 
-type BlockResponse struct {
-	Data []byte
-}
-
-type ResponseData struct {
-	Block []*blockchain.Block `json:"block"`
-}
-
-func (b *ResponseData) Print() {
-	for _, v := range b.Block {
-		v.Print()
+func (s *Service) Mining() bool {
+	isMined := s.blockchain.Mining()
+	if isMined {
+		return s.CallConsensus()
 	}
+	return false
 }
 
-func (bcs *BlockchainRPCAPI) GetChain(ctx context.Context, t TransactionRequest, out *BlockResponse) error {
-
-	bk := ResponseData{Block: bcs.service.blockchain.Chain()}
-	m, _ := json.Marshal(bk)
-
-	out.Data = m
-
-	return nil
+func (s *Service) StartMining() {
+	s.Mining()
+	_ = time.AfterFunc(time.Second*MINING_TIMER_SEC, s.StartMining)
 }
 
-func (bcs *BlockchainRPCAPI) SetChain(ctx context.Context, t BlockResponse, out *BlockResponse) error {
+func (s *Service) Amount(w http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case http.MethodGet:
+		blockchainAddress := req.URL.Query().Get("blockchain_address")
+		amount := s.blockchain.CalculateTotal(blockchainAddress)
 
-	var resp ResponseData
-	_ = json.Unmarshal(t.Data, &resp)
+		ar := &blockchain.AmountResponse{amount}
+		m, _ := ar.MarshalJSON()
 
-	if len(resp.Block) > 0 {
-		bcs.service.blockchain.SetChain(resp.Block)
-		bcs.service.blockchain.ClearTransactionPool()
-		log.Printf("Resovle confilicts replaced")
+		w.Header().Add("Content-Type", "application/json")
+		io.WriteString(w, string(m[:]))
+	default:
+		w.WriteHeader(http.StatusBadRequest)
+		log.Println("ERROR: Invalid HTTP Method")
 	}
-
-	return nil
 }
