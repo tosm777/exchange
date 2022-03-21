@@ -4,8 +4,6 @@ services:
         container_name: exchange
         build:
             context: ./docker/go
-        # ports:
-            # - 8080:8080
         volumes:
             - ./:/go/src/exchange/
         working_dir: /go/src/exchange/
@@ -55,15 +53,4 @@ services:
         volumes:
             - ./:/go/src/exchange/
         working_dir: /go/src/exchange/node/
-        tty: true
-
-    chain:
-        build:
-            context: ./docker/go
-        container_name: chain
-        ports:
-            - 6999:6999
-        volumes:
-            - ./:/go/src/exchange/
-        working_dir: /go/src/exchange/chain/
         tty: true
