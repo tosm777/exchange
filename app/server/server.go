@@ -11,7 +11,7 @@ import (
 	"blockchain"
 	"library/response"
 	"library/sign"
-	"wallet_server/wallet"
+	"wallet"
 
 	"github.com/rs/cors"
 )
@@ -91,8 +91,7 @@ func (ws *WalletServer) CreateTransaction(w http.ResponseWriter, req *http.Reque
 
 		log.Println("posting....")
 		m, _ := json.Marshal(bt)
-		resp, err := http.Post("http://172.28.0.1:7000/transactions", "application/json", bytes.NewBuffer(m))
-		// resp, err := http.Post("http://chain.develop:443/transactions", "application/json", buf)
+		resp, err := http.Post("http://node:7000/transactions", "application/json", bytes.NewBuffer(m))
 
 		if resp.StatusCode == 201 {
 			io.WriteString(w, string(response.JsonMessage("success")))
@@ -106,14 +105,10 @@ func (ws *WalletServer) CreateTransaction(w http.ResponseWriter, req *http.Reque
 }
 
 func (ws *WalletServer) WalletAmount(w http.ResponseWriter, req *http.Request) {
-	log.Println("wallet amount")
-
 	switch req.Method {
 	case http.MethodGet:
 		blockchainAddress := req.URL.Query().Get("blockchain_address")
-		// endpoint := fmt.Sprintf("%s/amount", ws.Gateway())
-		endpoint := "http://172.28.0.1:7000/amount"
-		// endpoint := "http://chain.develop:443/amount"
+		endpoint := "http://node:7000/amount"
 
 		client := http.DefaultClient
 		bcsReq, _ := http.NewRequest("GET", endpoint, nil)

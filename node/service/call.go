@@ -7,12 +7,14 @@ import (
 	"log"
 )
 
+const (
+	BService = "BlockchainRPCAPI"
+)
+
 func (s *Service) CallCreateTransaction(t *TransactionRequest) error {
 	peers := s.host.Peerstore().Peers()
 
-	replies := make([]*TransactionRequest, len(peers))
-
-	log.Printf("peers length: %d\n", len(peers))
+	replies := make([]*Response, len(peers))
 
 	errs := s.rpcClient.MultiCall(
 		Ctxts(len(peers)),
@@ -23,12 +25,10 @@ func (s *Service) CallCreateTransaction(t *TransactionRequest) error {
 		ToInterfaces(replies),
 	)
 
-	for i, err := range errs {
+	for _, err := range errs {
 		if err != nil {
 			fmt.Printf("ERROR: %v\n", err)
 			return err
-		} else {
-			fmt.Printf("SUCCESS: %v\n", replies[i])
 		}
 	}
 	return nil
@@ -37,11 +37,9 @@ func (s *Service) CallCreateTransaction(t *TransactionRequest) error {
 func (s *Service) CallConsensus() bool {
 	peers := s.host.Peerstore().Peers()
 
-	replies := make([]*TransactionRequest, len(peers))
+	replies := make([]*Response, len(peers))
 
-	log.Printf("peers length: %d\n", len(peers))
-
-	req := ResponseData{Block: s.blockchain.Chain()}
+	req := Chain{Block: s.blockchain.Chain()}
 	reqData, _ := json.Marshal(req)
 
 	errs := s.rpcClient.MultiCall(
@@ -49,7 +47,7 @@ func (s *Service) CallConsensus() bool {
 		peers,
 		BService,
 		"Consensus",
-		BlockResponse{reqData},
+		Request{reqData},
 		ToInterfaces(replies),
 	)
 
@@ -61,22 +59,20 @@ func (s *Service) CallConsensus() bool {
 		}
 	}
 
-	if len(peers)-2 > errCount {
+	if len(peers) == errCount {
 		return false
 	}
 
-	s.CallResolveConflicts(BlockResponse{reqData})
+	s.CallResolveConflicts(Request{reqData})
 
 	return true
 }
 
-func (s *Service) CallResolveConflicts(req BlockResponse) bool {
+func (s *Service) CallResolveConflicts(req Request) bool {
 	log.Println("ResolveConflicts!!!")
 
 	peers := s.host.Peerstore().Peers()
-	chains := make([]*BlockResponse, len(peers))
-
-	log.Printf("peers length: %d\n", len(peers))
+	chains := make([]*Response, len(peers))
 
 	errs := s.rpcClient.MultiCall(
 		Ctxts(len(peers)),

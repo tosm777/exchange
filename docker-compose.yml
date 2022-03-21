@@ -4,8 +4,8 @@ services:
         container_name: exchange
         build:
             context: ./docker/go
-        ports:
-            - 8080:8080
+        # ports:
+            # - 8080:8080
         volumes:
             - ./:/go/src/exchange/
         working_dir: /go/src/exchange/
@@ -17,6 +17,7 @@ services:
             context: ./docker/nginx
         depends_on:
             - wallet
+            - wallet_server
             - node
         ports:
             - 443:443
@@ -29,12 +30,10 @@ services:
     wallet:
         container_name: wallet
         image: node:latest
-        depends_on:
-            - wallet_server
         tty: true
         volumes:
-            - ./wallet:/var/www:cached
-        working_dir: /var/www/app
+            - ./app:/var/www:cached
+        working_dir: /var/www/client
 
     wallet_server:
         build:
@@ -42,7 +41,7 @@ services:
         container_name: wallet_server
         volumes:
             - ./:/go/src/exchange/
-        working_dir: /go/src/exchange/wallet_server/
+        working_dir: /go/src/exchange/app/server/
         tty: true
 
     node:
